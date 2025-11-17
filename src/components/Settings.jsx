@@ -1,105 +1,50 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { Modal, TextInput, Button, Text, Group, Alert, ActionIcon } from '@mantine/core'
 import '@mantine/core/styles.css'
-
-const maskApiKey = (key) => {
-  if (!key) return ''
-  if (key.length <= 4) {
-    return '*'.repeat(key.length)
-  }
-
-  const visibleSuffix = key.slice(-4)
-  const maskedLength = Math.max(key.length - 4, 0)
-  return `${'*'.repeat(maskedLength)}${visibleSuffix}`
-}
+import { useApiKey } from '../hooks/useApiKey'
 
 export function Settings({ opened, onClose }) {
-  const [apiKey, setApiKey] = useState('')
-  const [originalApiKey, setOriginalApiKey] = useState(null)
-  const [showApiKey, setShowApiKey] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [success, setSuccess] = useState(false)
+  const {
+    apiKey,
+    setApiKey,
+    originalApiKey,
+    showApiKey,
+    isLoading,
+    isError,
+    isSuccess,
+    error,
+    loadApiKey,
+    saveApiKey,
+    toggleVisibility,
+    reset,
+    maskApiKey
+  } = useApiKey()
 
   useEffect(() => {
     if (opened) {
-      // Load current API key when modal opens
-      window.electronAPI.getApiKey().then(key => {
-        setOriginalApiKey(key)
-        // Show empty field if no key exists, otherwise show masked version
-        setApiKey(key ? maskApiKey(key) : '')
-        setShowApiKey(false) // Reset visibility when modal opens
-        setError(null)
-        setSuccess(false)
-      }).catch(err => {
-        console.error('Error loading API key:', err)
-        setApiKey('')
-        setOriginalApiKey(null)
-        setShowApiKey(false)
-      })
+      loadApiKey()
     } else {
-      // Reset when modal closes
-      setApiKey('')
-      setOriginalApiKey(null)
-      setShowApiKey(false)
-      setError(null)
-      setSuccess(false)
+      reset()
     }
-  }, [opened])
-
-  const handleToggleVisibility = () => {
-    const maskedOriginal = originalApiKey ? maskApiKey(originalApiKey) : ''
-
-    if (apiKey && apiKey.includes('*') && originalApiKey) {
-      // If showing masked key, show real key
-      setApiKey(originalApiKey)
-      setShowApiKey(true)
-    } else if (showApiKey && originalApiKey && apiKey === originalApiKey) {
-      // If showing real key, show masked version
-      setApiKey(maskedOriginal)
-      setShowApiKey(false)
-    } else {
-      // Toggle visibility for new input
-      setShowApiKey(!showApiKey)
-    }
-  }
+  }, [opened, loadApiKey, reset])
 
   const handleSave = async () => {
     // If user hasn't changed the masked key, use original
     let keyToSave = apiKey.trim()
     const maskedOriginal = originalApiKey ? maskApiKey(originalApiKey) : ''
-    
+
     // If the input is the masked version, use original key
     if (originalApiKey && apiKey === maskedOriginal) {
       keyToSave = originalApiKey
     }
 
-    if (!keyToSave) {
-      setError('API key cannot be empty')
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-    setSuccess(false)
-
-    try {
-      const result = await window.electronAPI.setApiKey(keyToSave)
-      if (result.success) {
-        setSuccess(true)
-        setTimeout(() => {
-          setSuccess(false)
-          onClose()
-          // Reload window to apply new API key
-          window.location.reload()
-        }, 1000)
-      } else {
-        setError(result.error || 'Failed to save API key')
-      }
-    } catch (err) {
-      setError(err.message || 'An error occurred')
-    } finally {
-      setLoading(false)
+    const result = await saveApiKey(keyToSave)
+    if (result.success) {
+      setTimeout(() => {
+        onClose()
+        // Reload window to apply new API key
+        window.location.reload()
+      }, 1000)
     }
   }
 
@@ -181,7 +126,7 @@ export function Settings({ opened, onClose }) {
             rightSection={
               <ActionIcon
                 variant="subtle"
-                onClick={handleToggleVisibility}
+                onClick={toggleVisibility}
                 style={{ color: 'var(--text-secondary)' }}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
@@ -203,13 +148,13 @@ export function Settings({ opened, onClose }) {
           />
         </div>
 
-        {error && (
+        {isError && error && (
           <Alert color="red" styles={{ root: { background: 'var(--bg-subtle)' }, message: { color: 'var(--text-color)' } }}>
             {error}
           </Alert>
         )}
 
-        {success && (
+        {isSuccess && (
           <Alert color="green" styles={{ root: { background: 'var(--bg-subtle)' }, message: { color: 'var(--text-color)' } }}>
             API key saved successfully!
           </Alert>
@@ -235,9 +180,9 @@ export function Settings({ opened, onClose }) {
           </Button>
           <Button
             onClick={handleSave}
-            loading={loading}
-            styles={{ 
-              root: { 
+            loading={isLoading}
+            styles={{
+              root: {
                 background: 'var(--primary-color)',
                 color: 'white',
                 border: 'none'
