@@ -3,24 +3,11 @@ require('dotenv').config()
 const { app, BrowserWindow, ipcMain, screen, Tray, nativeImage, nativeTheme } = require('electron')
 const path = require('path')
 const { createApiClient } = require('../lib/api-client')
+const keytar = require('keytar')
 
-// Initialize electron-store for settings (using dynamic import for ES Module)
-let store = null
-let Store = null
-
-async function initializeStore() {
-  if (!Store) {
-    const StoreModule = await import('electron-store')
-    Store = StoreModule.default
-    store = new Store({
-      name: 'govee-bar-settings',
-      defaults: {
-        apiKey: null
-      }
-    })
-  }
-  return store
-}
+// Service name for keytar (used to identify the app in system credential storage)
+const KEYTAR_SERVICE = 'govee-bar'
+const KEYTAR_ACCOUNT = 'api-key'
 
 // Import electron-liquid-glass for enhanced translucent effects (macOS only)
 let liquidGlass = null
@@ -35,13 +22,15 @@ if (process.platform === 'darwin') {
   console.log('ℹ electron-liquid-glass skipped (not macOS)')
 }
 
-// Get API key from store or fallback to .env
+// Get API key from system credential storage or fallback to .env
 async function getApiKey() {
-  if (!store) {
-    await initializeStore()
+  try {
+    const storedApiKey = await keytar.getPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT)
+    return storedApiKey || process.env.GOVEE_API_KEY || null
+  } catch (error) {
+    console.error('Error retrieving API key from keytar:', error)
+    return process.env.GOVEE_API_KEY || null
   }
-  const storedApiKey = store ? store.get('apiKey') : null
-  return storedApiKey || process.env.GOVEE_API_KEY || null
 }
 
 // Initialize API client
@@ -115,8 +104,6 @@ const handleNativeThemeUpdated = () => {
   const newTheme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
   broadcastThemeToRenderer(newTheme)
 }
-
-nativeTheme.on('updated', handleNativeThemeUpdated)
 
 // Create orange square icon
 function createTrayIcon() {
@@ -270,11 +257,11 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  // Initialize store first
-  await initializeStore()
-  
   // Initialize API client
   await initializeApiClient()
+
+  // Setup theme change listener
+  nativeTheme.on('updated', handleNativeThemeUpdated)
 
   // Create tray icon first
   const icon = createTrayIcon()
@@ -333,11 +320,8 @@ ipcMain.handle('set-api-key', async (event, apiKeyInput) => {
   try {
     const { trimmedApiKey, client } = await validateApiKeyInput(apiKeyInput)
 
-    if (!store) {
-      await initializeStore()
-    }
-
-    store.set('apiKey', trimmedApiKey)
+    // Store API key securely in system credential storage
+    await keytar.setPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT, trimmedApiKey)
     apiClient = client
 
     return { success: true }

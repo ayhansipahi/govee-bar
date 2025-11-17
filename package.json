@@ -25,6 +25,7 @@
     "axios": "^1.6.0",
     "electron-liquid-glass": "^1.1.1",
     "electron-store": "^10.1.0",
+    "keytar": "^7.9.0",
     "mqtt": "^5.14.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -33,7 +34,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^9.1.0",
     "dotenv": "^16.4.5",
-    "electron": "^33.2.1",
+    "electron": "^33.4.11",
     "electron-builder": "^25.1.8",
     "vite": "^6.0.5",
     "wait-on": "^8.0.1"
